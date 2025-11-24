@@ -1,3 +1,5 @@
 # Font
 
 This the dx-font project.
+
+<!-- I am creating a brand new rust project with all latest crates about a project where you write a query for a images, video, audio, illistrations, 3d assets, Text(Articles and Big Novels ...) and after you write query we will use the free version of let's say unslash and then and download the images inside the /media directory and you we will use basically all free assets stores from the internet - This is not only the features you can changes the format of the assets of the images, 3d assets ... to our likings and all the assets will be from through internet we will first use best free api for the task like wikipedia for the texts, stock for videos and unslash and free iamges providers for images and like this we will use all free assets providers and even scrape internet in some cases and then we will convert the assets inside the media folder to user demand so please use the best rust crates and best apis or websites scraping teching to do this - And as this is a big project you can do it step by step!!! -->
