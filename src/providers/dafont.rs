@@ -6,7 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
 
-use crate::models::{Font, FontFamily, FontCategory, FontProvider, SearchQuery};
+use crate::models::{Font, FontFamily, FontCategory, FontProvider, FontLicense, SearchQuery};
 use crate::providers::FontProviderTrait;
 
 pub struct DafontProvider {
@@ -191,17 +191,12 @@ impl DafontProvider {
             Font {
                 id: format!("dafont-{}", id),
                 name: name.to_string(),
-                provider: FontProvider::Dafont,
-                family: None,
+                provider: FontProvider::DaFont,
                 category: Self::parse_category(category),
-                variants: vec!["regular".to_string()],
                 variant_count: 1,
-                subsets: vec!["latin".to_string()],
-                license: Some("Free for personal use".to_string()),
-                designer: None,
+                license: Some(FontLicense::FreeCommercial),
                 preview_url: Some(format!("{}/{}.font", self.base_url, id)),
                 download_url: Some(format!("{}/dl/?f={}", self.base_url, id)),
-                popularity: None,
             }
         }).collect()
     }
@@ -246,15 +241,18 @@ impl FontProviderTrait for DafontProvider {
         Ok(FontFamily {
             id: font.id.clone(),
             name: font.name.clone(),
-            provider: FontProvider::Dafont,
+            provider: FontProvider::DaFont,
             category: font.category.clone(),
             variants: vec![],
-            subsets: font.subsets.clone(),
+            subsets: vec!["latin".to_string()],
             license: font.license.clone(),
-            designer: font.designer.clone(),
+            designer: None,
             description: None,
             preview_url: font.preview_url.clone(),
             download_url: font.download_url.clone(),
+            languages: vec!["Latin".to_string()],
+            last_modified: None,
+            popularity: None,
         })
     }
     

@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
 
-use crate::models::{Font, FontFamily, FontCategory, FontProvider, SearchQuery};
+use crate::models::{Font, FontFamily, FontCategory, FontProvider, FontLicense, SearchQuery};
 use crate::providers::FontProviderTrait;
 
 pub struct FontSpaceProvider {
@@ -244,16 +244,11 @@ impl FontSpaceProvider {
                 id: format!("fontspace-{}", id),
                 name: name.to_string(),
                 provider: FontProvider::FontSpace,
-                family: None,
                 category: Self::parse_category(category),
-                variants: vec!["regular".to_string()],
                 variant_count: 1,
-                subsets: vec!["latin".to_string()],
-                license: Some(license.to_string()),
-                designer: None,
+                license: Some(FontLicense::OFL),
                 preview_url: Some(format!("{}/category/{}", self.base_url, id)),
                 download_url: Some(format!("{}/get/{}.zip", self.base_url, id)),
-                popularity: None,
             }
         }).collect()
     }
@@ -281,9 +276,10 @@ impl FontProviderTrait for FontSpaceProvider {
             .ok_or_else(|| anyhow::anyhow!("Font not found: {}", font_id))?;
         Ok(FontFamily {
             id: font.id, name: font.name, provider: FontProvider::FontSpace,
-            category: font.category, variants: vec![], subsets: font.subsets,
-            license: font.license, designer: font.designer, description: None,
+            category: font.category, variants: vec![], subsets: vec!["latin".to_string()],
+            license: font.license, designer: None, description: None,
             preview_url: font.preview_url, download_url: font.download_url,
+            languages: vec!["Latin".to_string()], last_modified: None, popularity: None,
         })
     }
     

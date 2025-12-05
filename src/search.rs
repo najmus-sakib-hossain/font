@@ -1,15 +1,18 @@
 //! Font search functionality
 //!
-//! Provides unified search across all font providers.
+//! Provides unified search across all font providers with optimized
+//! concurrent fetching for maximum performance.
 
 use anyhow::Result;
 use rayon::prelude::*;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::models::{FontFamily, FontProvider, SearchQuery, SearchResults, FontCategory};
 use crate::providers::ProviderRegistry;
+use crate::cdn::{CdnUrlGenerator, FontCdnUrls};
 
-/// Main font search engine
+/// Main font search engine with performance optimizations
 pub struct FontSearch {
     registry: Arc<ProviderRegistry>,
 }
@@ -30,7 +33,7 @@ impl FontSearch {
         }
     }
     
-    /// Search for fonts matching the query across all providers
+    /// Search for fonts matching the query across all providers (concurrent)
     pub async fn search(&self, query: &str) -> Result<SearchResults> {
         let search_query = SearchQuery {
             query: query.to_string(),
@@ -38,6 +41,14 @@ impl FontSearch {
         };
         
         self.registry.search_all(&search_query).await
+    }
+    
+    /// Search with timing information
+    pub async fn search_timed(&self, query: &str) -> Result<(SearchResults, Duration)> {
+        let start = Instant::now();
+        let results = self.search(query).await?;
+        let elapsed = start.elapsed();
+        Ok((results, elapsed))
     }
     
     /// Search with advanced options
@@ -49,7 +60,7 @@ impl FontSearch {
     pub async fn search_by_category(&self, category: FontCategory) -> Result<SearchResults> {
         let query = SearchQuery {
             query: String::new(),
-            category: Some(category),
+            category: Some(category.clone()),
             ..Default::default()
         };
         
@@ -58,36 +69,24 @@ impl FontSearch {
         // Filter by category
         results.fonts = results.fonts
             .into_iter()
-            .filter(|f| f.category.as_ref() == Some(&query.category.as_ref().unwrap()))
+            .filter(|f| f.category.as_ref() == Some(&category))
             .collect();
         results.total = results.fonts.len();
         
         Ok(results)
     }
     
-    /// List all available fonts from all providers
+    /// List all available fonts from all providers (concurrent)
     pub async fn list_all(&self) -> Result<SearchResults> {
-        let mut all_fonts = Vec::new();
-        let mut providers_searched = Vec::new();
-        
-        for provider in self.registry.providers() {
-            providers_searched.push(provider.name().to_string());
-            match provider.list_all().await {
-                Ok(fonts) => all_fonts.extend(fonts),
-                Err(e) => {
-                    tracing::warn!("Error listing fonts from {}: {}", provider.name(), e);
-                }
-            }
-        }
-        
-        let total = all_fonts.len();
-        
-        Ok(SearchResults {
-            fonts: all_fonts,
-            total,
-            query: String::new(),
-            providers_searched,
-        })
+        self.registry.list_all_concurrent().await
+    }
+    
+    /// List all with timing information
+    pub async fn list_all_timed(&self) -> Result<(SearchResults, Duration)> {
+        let start = Instant::now();
+        let results = self.list_all().await?;
+        let elapsed = start.elapsed();
+        Ok((results, elapsed))
     }
     
     /// Get detailed information about a specific font
@@ -101,28 +100,40 @@ impl FontSearch {
         Err(anyhow::anyhow!("Provider not found: {:?}", provider))
     }
     
-    /// Check health of all providers
-    pub async fn health_check(&self) -> Vec<(String, bool)> {
-        let mut results = Vec::new();
-        
-        for provider in self.registry.providers() {
-            let is_healthy = provider.health_check().await.unwrap_or(false);
-            results.push((provider.name().to_string(), is_healthy));
+    /// Get CDN URLs for a font for preview/usage
+    pub fn get_cdn_urls(&self, font_id: &str, font_name: &str, provider: &FontProvider) -> FontCdnUrls {
+        match provider {
+            FontProvider::GoogleFonts => CdnUrlGenerator::for_google_font(font_id, font_name),
+            FontProvider::BunnyFonts => CdnUrlGenerator::for_bunny_font(font_id, font_name),
+            FontProvider::Fontsource => CdnUrlGenerator::for_fontsource_font(font_id),
+            _ => CdnUrlGenerator::for_google_font(font_id, font_name),
         }
-        
-        results
+    }
+    
+    /// Check health of all providers (concurrent)
+    pub async fn health_check(&self) -> Vec<(String, bool)> {
+        self.registry.health_check_all().await
+            .into_iter()
+            .map(|(name, healthy, _)| (name, healthy))
+            .collect()
+    }
+    
+    /// Check health with timing information
+    pub async fn health_check_timed(&self) -> Vec<(String, bool, Duration)> {
+        self.registry.health_check_all().await
     }
     
     /// Get statistics about available fonts
     pub async fn get_stats(&self) -> Result<FontStats> {
-        let results = self.list_all().await?;
+        let (results, elapsed) = self.list_all_timed().await?;
         
         let mut stats = FontStats::default();
         stats.total_fonts = results.total;
         stats.providers_count = results.providers_searched.len();
         stats.providers = results.providers_searched;
+        stats.fetch_time_ms = elapsed.as_millis() as u64;
         
-        // Count by category using parallel processing
+        // Count by category using parallel processing (Rayon)
         let category_counts: Vec<(Option<FontCategory>, usize)> = results.fonts
             .par_iter()
             .fold(
@@ -159,7 +170,7 @@ impl FontSearch {
     }
 }
 
-/// Font statistics
+/// Font statistics with performance metrics
 #[derive(Debug, Default, serde::Serialize)]
 pub struct FontStats {
     pub total_fonts: usize,
@@ -171,4 +182,5 @@ pub struct FontStats {
     pub handwriting_count: usize,
     pub monospace_count: usize,
     pub uncategorized_count: usize,
+    pub fetch_time_ms: u64,
 }
