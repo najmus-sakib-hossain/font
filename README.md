@@ -4,6 +4,8 @@ This the dx-font project.
 
 Before doing anything please read and understand prompts and attached files carefully. After that create tasklist and then start working on the project step by step and systematically.
 
+Then give me demo of dx-font search font where you search for any font and then give that fonts details throughout all providers and give json data that I can put my text so that I can see how that font looks when I use that font. And then also show the demo demo of downlaod font where I can download the font from any provider and then show me the downloaded font file inside the playground folder. And make sure to give me timing details about how much time it took to search the font and how much time it took to download the font. And if you can then please use rayon and tokio crate to make the search and download as fast as possible.
+
 And also test the search and downlaod speed on fonts and make sure to make as fast as possible using any rust crates possible!!!
 
 After all of that we can do something that will let just use the font in example about it will look when you use that font so make sure to get a way like if its github use jsdeiliver or cdn to access that font so that we can see how the font looks when we use it in real world.
