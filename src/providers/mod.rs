@@ -6,6 +6,8 @@ pub mod google_fonts;
 pub mod bunny_fonts;
 pub mod fontsource;
 pub mod fontshare;
+pub mod font_library;
+pub mod github_fonts;
 
 use async_trait::async_trait;
 use crate::models::{FontFamily, Font, SearchQuery, SearchResults};
@@ -61,11 +63,13 @@ impl ProviderRegistry {
         let client = create_http_client()?;
         let mut registry = Self::new();
         
-        // Add default providers
+        // Add all providers for maximum font coverage
         registry.register(Box::new(google_fonts::GoogleFontsProvider::new(client.clone())));
         registry.register(Box::new(bunny_fonts::BunnyFontsProvider::new(client.clone())));
         registry.register(Box::new(fontsource::FontsourceProvider::new(client.clone())));
         registry.register(Box::new(fontshare::FontshareProvider::new(client.clone())));
+        registry.register(Box::new(font_library::FontLibraryProvider::new(client.clone())));
+        registry.register(Box::new(github_fonts::GitHubFontsProvider::new(client.clone())));
         
         Ok(registry)
     }
