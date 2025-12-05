@@ -8,10 +8,16 @@ pub mod fontsource;
 pub mod fontshare;
 pub mod font_library;
 pub mod github_fonts;
+pub mod dafont;
+pub mod fontspace;
+pub mod fonts1001;
+pub mod fontsquirrel;
 
 use async_trait::async_trait;
 use crate::models::{FontFamily, Font, SearchQuery, SearchResults};
 use anyhow::Result;
+use futures::future::join_all;
+use tokio::time::Instant;
 
 /// Trait that all font providers must implement
 #[async_trait]
@@ -63,13 +69,17 @@ impl ProviderRegistry {
         let client = create_http_client()?;
         let mut registry = Self::new();
         
-        // Add all providers for maximum font coverage
+        // Add all providers for maximum font coverage (50k+ fonts)
         registry.register(Box::new(google_fonts::GoogleFontsProvider::new(client.clone())));
         registry.register(Box::new(bunny_fonts::BunnyFontsProvider::new(client.clone())));
         registry.register(Box::new(fontsource::FontsourceProvider::new(client.clone())));
         registry.register(Box::new(fontshare::FontshareProvider::new(client.clone())));
         registry.register(Box::new(font_library::FontLibraryProvider::new(client.clone())));
         registry.register(Box::new(github_fonts::GitHubFontsProvider::new(client.clone())));
+        registry.register(Box::new(dafont::DafontProvider::new(client.clone())));
+        registry.register(Box::new(fontspace::FontSpaceProvider::new(client.clone())));
+        registry.register(Box::new(fonts1001::Fonts1001Provider::new(client.clone())));
+        registry.register(Box::new(fontsquirrel::FontSquirrelProvider::new(client.clone())));
         
         Ok(registry)
     }

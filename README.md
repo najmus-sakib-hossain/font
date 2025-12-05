@@ -2,6 +2,8 @@
 
 This the dx-font project.
 
+And also test the search and downlaod speed on fonts and make sure to make as fast as possible using any rust crates possible!!!
+
 Before doing anything please read and understand prompts and attached files carefully. After that create tasklist and then start working on the project step by step and systematically.
 
 After all of that we can do something that will let just use the font in example about it will look when you use that font so make sure to get a way like if its github use jsdeiliver or cdn to access that font so that we can see how the font looks when we use it in real world.

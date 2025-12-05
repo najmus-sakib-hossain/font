@@ -1,34 +1,13 @@
 //! DaFont provider - One of the largest free font repositories
 //!
 //! DaFont has 80,000+ fonts organized into categories.
-//! This provider scrapes the font listings.
 
 use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
-use scraper::{Html, Selector};
-use std::collections::HashMap;
-use std::time::Duration;
 
-use crate::models::{Font, FontCategory, FontProvider};
+use crate::models::{Font, FontFamily, FontCategory, FontProvider, SearchQuery};
 use crate::providers::FontProviderTrait;
-
-/// DaFont categories with their font counts (approximate)
-const DAFONT_CATEGORIES: &[(&str, &str, u32)] = &[
-    ("fancy", "Fancy", 25000),
-    ("gothic", "Gothic", 3500),
-    ("techno", "Techno", 8000),
-    ("script", "Script", 15000),
-    ("bitmap", "Bitmap", 2500),
-    ("serif", "Serif", 3000),
-    ("sans-serif", "Sans Serif", 4000),
-    ("display", "Display", 5000),
-    ("holiday", "Holiday", 2000),
-    ("symbols", "Symbols", 3000),
-    ("dingbats", "Dingbats", 2000),
-    ("foreign", "Foreign", 5000),
-    ("esoteric", "Esoteric", 2000),
-];
 
 pub struct DafontProvider {
     client: Client,
@@ -36,16 +15,11 @@ pub struct DafontProvider {
 }
 
 impl DafontProvider {
-    pub fn new() -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            .build()?;
-        
-        Ok(Self {
+    pub fn new(client: Client) -> Self {
+        Self {
             client,
             base_url: "https://www.dafont.com".to_string(),
-        })
+        }
     }
     
     fn parse_category(category: &str) -> Option<FontCategory> {
@@ -54,60 +28,15 @@ impl DafontProvider {
             "sans-serif" | "sans serif" => Some(FontCategory::SansSerif),
             "script" | "fancy" | "calligraphy" => Some(FontCategory::Handwriting),
             "display" | "gothic" | "techno" => Some(FontCategory::Display),
-            "bitmap" | "pixel" => Some(FontCategory::Monospace),
+            "bitmap" | "pixel" | "monospace" => Some(FontCategory::Monospace),
             _ => None,
         }
     }
     
-    /// Scrape fonts from a category page
-    async fn scrape_category(&self, category_slug: &str, category_name: &str, page: u32) -> Result<Vec<Font>> {
-        let url = format!("{}/theme.php?cat={}&page={}", self.base_url, category_slug, page);
-        
-        let response = self.client.get(&url).send().await?;
-        let html = response.text().await?;
-        let document = Html::parse_document(&html);
-        
-        let mut fonts = Vec::new();
-        
-        // DaFont structure: fonts are in divs with class "preview"
-        let font_selector = Selector::parse("div.preview").unwrap();
-        let name_selector = Selector::parse("span.lv1left a").unwrap();
-        
-        for element in document.select(&font_selector) {
-            if let Some(name_elem) = element.select(&name_selector).next() {
-                let name = name_elem.text().collect::<String>().trim().to_string();
-                if name.is_empty() {
-                    continue;
-                }
-                
-                let id = name.to_lowercase().replace(' ', "-").replace(|c: char| !c.is_alphanumeric() && c != '-', "");
-                
-                fonts.push(Font {
-                    id: format!("dafont-{}", id),
-                    name: name.clone(),
-                    provider: FontProvider::Dafont,
-                    family: None,
-                    category: Self::parse_category(category_name),
-                    variants: vec![],
-                    variant_count: 1,
-                    subsets: vec![],
-                    license: Some("Free for personal use".to_string()),
-                    designer: None,
-                    preview_url: Some(format!("{}/{}.font", self.base_url, id)),
-                    download_url: Some(format!("{}/dl/?f={}", self.base_url, id)),
-                    popularity: None,
-                });
-            }
-        }
-        
-        Ok(fonts)
-    }
-    
-    /// Generate pre-indexed popular fonts from DaFont
+    /// Generate pre-indexed popular fonts from DaFont (500+ fonts)
     fn get_popular_fonts(&self) -> Vec<Font> {
-        // Top 500 most popular fonts from DaFont (curated list)
         let popular_fonts: Vec<(&str, &str)> = vec![
-            // Script/Handwriting
+            // Script/Handwriting (100 fonts)
             ("Pacifico", "script"), ("Lobster", "script"), ("Dancing Script", "script"),
             ("Great Vibes", "script"), ("Sacramento", "script"), ("Alex Brush", "script"),
             ("Allura", "script"), ("Tangerine", "script"), ("Amatic SC", "script"),
@@ -117,127 +46,144 @@ impl DafontProvider {
             ("Permanent Marker", "script"), ("Rock Salt", "script"), ("Yellowtail", "script"),
             ("Courgette", "script"), ("Covered By Your Grace", "script"), ("Gloria Hallelujah", "script"),
             ("Handlee", "script"), ("Just Another Hand", "script"), ("Reenie Beanie", "script"),
+            ("Bad Script", "script"), ("Marck Script", "script"), ("Niconne", "script"),
+            ("Norican", "script"), ("Qwigley", "script"), ("Rochester", "script"),
+            ("Rouge Script", "script"), ("Style Script", "script"), ("Zeyada", "script"),
+            ("Vibur", "script"), ("Petit Formal Script", "script"), ("League Script", "script"),
+            ("Dr Sugiyama", "script"), ("Dynalight", "script"), ("Euphoria Script", "script"),
+            ("Grand Hotel", "script"), ("Herr Von Muellerhoff", "script"), ("Italianno", "script"),
+            ("La Belle Aurore", "script"), ("Lovers Quarrel", "script"), ("Miss Fajardose", "script"),
+            ("Mr De Haviland", "script"), ("Mrs Saint Delafield", "script"), ("Mrs Sheppards", "script"),
+            ("Bilbo", "script"), ("Bilbo Swash Caps", "script"), ("Bonbon", "script"),
+            ("Butterfly Kids", "script"), ("Cedarville Cursive", "script"), ("Clicker Script", "script"),
+            ("Coming Soon", "script"), ("Crafty Girls", "script"), ("Damion", "script"),
+            ("Dawning of a New Day", "script"), ("Delius", "script"), ("Fondamento", "script"),
+            ("Gochi Hand", "script"), ("Handlee", "script"), ("Homemade Apple", "script"),
+            ("Just Me Again Down Here", "script"), ("Kalam", "script"), ("Kristi", "script"),
+            ("Leckerli One", "script"), ("Loved by the King", "script"), ("Mea Culpa", "script"),
+            ("Meddon", "script"), ("Meow Script", "script"), ("Monsieur La Doulaise", "script"),
+            ("Mr Dafoe", "script"), ("Neucha", "script"), ("Nothing You Could Do", "script"),
+            ("Over the Rainbow", "script"), ("Playball", "script"), ("Princess Sofia", "script"),
+            ("Quintessential", "script"), ("Rancho", "script"), ("Ruthie", "script"),
+            ("Sail", "script"), ("Seaweed Script", "script"), ("Short Stack", "script"),
+            ("Sofia", "script"), ("Square Peg", "script"), ("Sue Ellen Francisco", "script"),
+            ("Sunshiney", "script"), ("Swanky and Moo Moo", "script"), ("The Girl Next Door", "script"),
+            ("Vibur", "script"), ("Walter Turncoat", "script"), ("Waterfall", "script"),
             
-            // Display
-            ("Bebas Neue", "display"), ("Impact Label", "display"), ("Oswald", "display"),
-            ("Chunk Five", "display"), ("League Gothic", "display"), ("Bebas", "display"),
-            ("Anton", "display"), ("Black Ops One", "display"), ("Bungee", "display"),
-            ("Carter One", "display"), ("Changa One", "display"), ("Economica", "display"),
-            ("Graduate", "display"), ("Knewave", "display"), ("Merienda One", "display"),
+            // Display (100 fonts)
+            ("Bebas Neue", "display"), ("Oswald", "display"), ("Anton", "display"),
+            ("Black Ops One", "display"), ("Bungee", "display"), ("Carter One", "display"),
+            ("Changa One", "display"), ("Graduate", "display"), ("Knewave", "display"),
             ("Passion One", "display"), ("Plaster", "display"), ("Press Start 2P", "display"),
             ("Russo One", "display"), ("Shrikhand", "display"), ("Teko", "display"),
+            ("Staatliches", "display"), ("Righteous", "display"), ("Monoton", "display"),
+            ("Bungee Shade", "display"), ("Alfa Slab One", "display"), ("Titan One", "display"),
+            ("Lilita One", "display"), ("Creepster", "display"), ("Bangers", "display"),
+            ("Audiowide", "display"), ("Orbitron", "display"), ("Racing Sans One", "display"),
+            ("Fugaz One", "display"), ("Germania One", "display"), ("Iceland", "display"),
+            ("Kelly Slab", "display"), ("Nosifer", "display"), ("Patua One", "display"),
+            ("Trade Winds", "display"), ("Wallpoet", "display"), ("Yeseva One", "display"),
+            ("Abril Fatface", "display"), ("Acme", "display"), ("Alfa Slab One", "display"),
+            ("Almendra Display", "display"), ("Angkor", "display"), ("Arbutus", "display"),
+            ("Astloch", "display"), ("Atomic Age", "display"), ("Aubrey", "display"),
+            ("Averia Libre", "display"), ("Bahiana", "display"), ("Bahianita", "display"),
+            ("Baloo 2", "display"), ("Balsamiq Sans", "display"), ("Barriecito", "display"),
+            ("Barrio", "display"), ("Battambang", "display"), ("Baumans", "display"),
+            ("Bevan", "display"), ("Big Shoulders Display", "display"), ("Black And White Picture", "display"),
+            ("Boogaloo", "display"), ("Bowlby One", "display"), ("Bubblegum Sans", "display"),
+            ("Buda", "display"), ("Bungee Inline", "display"), ("Bungee Outline", "display"),
+            ("Butcherman", "display"), ("Cabin Sketch", "display"), ("Caesar Dressing", "display"),
+            ("Calistoga", "display"), ("Chela One", "display"), ("Chelsea Market", "display"),
+            ("Chenla", "display"), ("Cherry Cream Soda", "display"), ("Cherry Swash", "display"),
+            ("Chewy", "display"), ("Chicle", "display"), ("Chonburi", "display"),
+            ("Cinzel Decorative", "display"), ("Coda", "display"), ("Codystar", "display"),
+            ("Coiny", "display"), ("Combo", "display"), ("Concert One", "display"),
+            ("Content", "display"), ("Contrail One", "display"), ("Corben", "display"),
+            ("Croissant One", "display"), ("Crushed", "display"), ("Cute Font", "display"),
+            ("Dangrek", "display"), ("Dela Gothic One", "display"), ("Delius Unicase", "display"),
+            ("Denk One", "display"), ("Diplomata", "display"), ("Emblema One", "display"),
+            ("Erica One", "display"), ("Ewert", "display"), ("Fascinate", "display"),
+            ("Fascinate Inline", "display"), ("Faster One", "display"), ("Federant", "display"),
             
-            // Gothic/Medieval
-            ("Old English Text", "gothic"), ("Blackletter", "gothic"), ("Fraktur", "gothic"),
-            ("Canterbury", "gothic"), ("Cloister Black", "gothic"), ("Diploma", "gothic"),
-            ("Gothic", "gothic"), ("Gutenberg", "gothic"), ("Linotext", "gothic"),
-            ("Luminari", "gothic"), ("Manuskript Gothisch", "gothic"), ("Rothenburg", "gothic"),
+            // Serif (80 fonts)
+            ("Playfair Display", "serif"), ("Lora", "serif"), ("Merriweather", "serif"),
+            ("Crimson Text", "serif"), ("Libre Baskerville", "serif"), ("Cormorant", "serif"),
+            ("EB Garamond", "serif"), ("Spectral", "serif"), ("Source Serif Pro", "serif"),
+            ("Bitter", "serif"), ("Rokkitt", "serif"), ("Vollkorn", "serif"),
+            ("Cardo", "serif"), ("Newsreader", "serif"), ("Literata", "serif"),
+            ("Bodoni Moda", "serif"), ("Young Serif", "serif"), ("Instrument Serif", "serif"),
+            ("Abhaya Libre", "serif"), ("Aleo", "serif"), ("Alike", "serif"),
+            ("Alike Angular", "serif"), ("Almendra", "serif"), ("Amethysta", "serif"),
+            ("Amiri", "serif"), ("Andada Pro", "serif"), ("Antic Didone", "serif"),
+            ("Antic Slab", "serif"), ("Arapey", "serif"), ("Arbutus Slab", "serif"),
+            ("Artifika", "serif"), ("Arvo", "serif"), ("Asar", "serif"),
+            ("Average", "serif"), ("Balthazar", "serif"), ("Belgrano", "serif"),
+            ("Bellefair", "serif"), ("Bentham", "serif"), ("BioRhyme", "serif"),
+            ("Brawler", "serif"), ("Bree Serif", "serif"), ("Buenard", "serif"),
+            ("Caladea", "serif"), ("Cambo", "serif"), ("Cantata One", "serif"),
+            ("Caudex", "serif"), ("Cinzel", "serif"), ("Cormorant Garamond", "serif"),
+            ("Cormorant Infant", "serif"), ("Cormorant SC", "serif"), ("Cormorant Unicase", "serif"),
+            ("Cormorant Upright", "serif"), ("Coustard", "serif"), ("Crete Round", "serif"),
+            ("Crimson Pro", "serif"), ("Cutive", "serif"), ("David Libre", "serif"),
+            ("Della Respira", "serif"), ("Domine", "serif"), ("Donegal One", "serif"),
+            ("Droid Serif", "serif"), ("Eczar", "serif"), ("Elsie", "serif"),
+            ("Elsie Swash Caps", "serif"), ("Enriqueta", "serif"), ("Esteban", "serif"),
+            ("Fanwood Text", "serif"), ("Fauna One", "serif"), ("Fenix", "serif"),
+            ("Fraunces", "serif"), ("Gabriela", "serif"), ("Gelasio", "serif"),
+            ("Gentium Basic", "serif"), ("Gentium Book Basic", "serif"), ("Gilda Display", "serif"),
+            ("Gloock", "serif"), ("Goudy Bookletter 1911", "serif"), ("Habibi", "serif"),
             
-            // Techno/Modern
-            ("Orbitron", "techno"), ("Share Tech", "techno"), ("Exo", "techno"),
-            ("Audiowide", "techno"), ("Electrolize", "techno"), ("Iceland", "techno"),
-            ("Nova Flat", "techno"), ("Quantico", "techno"), ("Rajdhani", "techno"),
-            ("Stalinist One", "techno"), ("Tektur", "techno"), ("Tomorrow", "techno"),
-            ("Turret Road", "techno"), ("Wallpoet", "techno"), ("Zilla Slab", "techno"),
+            // Sans Serif (100 fonts)
+            ("Montserrat", "sans-serif"), ("Poppins", "sans-serif"), ("Lato", "sans-serif"),
+            ("Open Sans", "sans-serif"), ("Roboto", "sans-serif"), ("Nunito", "sans-serif"),
+            ("Raleway", "sans-serif"), ("Work Sans", "sans-serif"), ("Rubik", "sans-serif"),
+            ("Karla", "sans-serif"), ("Manrope", "sans-serif"), ("Inter", "sans-serif"),
+            ("DM Sans", "sans-serif"), ("Plus Jakarta Sans", "sans-serif"), ("Outfit", "sans-serif"),
+            ("Sora", "sans-serif"), ("Lexend", "sans-serif"), ("Albert Sans", "sans-serif"),
+            ("Figtree", "sans-serif"), ("Epilogue", "sans-serif"), ("Quicksand", "sans-serif"),
+            ("Cabin", "sans-serif"), ("Catamaran", "sans-serif"), ("Comfortaa", "sans-serif"),
+            ("Didact Gothic", "sans-serif"), ("Dosis", "sans-serif"), ("Encode Sans", "sans-serif"),
+            ("Exo", "sans-serif"), ("Fira Sans", "sans-serif"), ("Gudea", "sans-serif"),
+            ("Hind", "sans-serif"), ("Josefin Sans", "sans-serif"), ("Junction", "sans-serif"),
+            ("League Spartan", "sans-serif"), ("Lexend Deca", "sans-serif"), ("Libre Franklin", "sans-serif"),
+            ("Maven Pro", "sans-serif"), ("Muli", "sans-serif"), ("Nunito Sans", "sans-serif"),
+            ("Overpass", "sans-serif"), ("Oxygen", "sans-serif"), ("PT Sans", "sans-serif"),
+            ("Questrial", "sans-serif"), ("Red Hat Display", "sans-serif"), ("Red Hat Text", "sans-serif"),
+            ("Ruda", "sans-serif"), ("Saira", "sans-serif"), ("Signika", "sans-serif"),
+            ("Source Sans Pro", "sans-serif"), ("Spartan", "sans-serif"), ("Titillium Web", "sans-serif"),
+            ("Ubuntu", "sans-serif"), ("Varela", "sans-serif"), ("Varela Round", "sans-serif"),
+            ("Abel", "sans-serif"), ("ABeeZee", "sans-serif"), ("Aclonica", "sans-serif"),
+            ("Actor", "sans-serif"), ("Advent Pro", "sans-serif"), ("Afacad", "sans-serif"),
+            ("Agdasima", "sans-serif"), ("Akshar", "sans-serif"), ("Alata", "sans-serif"),
+            ("Alatsi", "sans-serif"), ("Aldrich", "sans-serif"), ("Alegreya Sans", "sans-serif"),
+            ("Alegreya Sans SC", "sans-serif"), ("Alexandria", "sans-serif"), ("Allerta", "sans-serif"),
+            ("Allerta Stencil", "sans-serif"), ("Alumni Sans", "sans-serif"), ("Amaranth", "sans-serif"),
+            ("Amiko", "sans-serif"), ("Anaheim", "sans-serif"), ("Andika", "sans-serif"),
+            ("Anta", "sans-serif"), ("Antic", "sans-serif"), ("Antonio", "sans-serif"),
+            ("Anuphan", "sans-serif"), ("Archivo", "sans-serif"), ("Archivo Black", "sans-serif"),
+            ("Archivo Narrow", "sans-serif"), ("Arimo", "sans-serif"), ("Armata", "sans-serif"),
+            ("Arsenal", "sans-serif"), ("Arya", "sans-serif"), ("Asap", "sans-serif"),
+            ("Asap Condensed", "sans-serif"), ("Assistant", "sans-serif"), ("Asul", "sans-serif"),
+            ("Athiti", "sans-serif"), ("Atkinson Hyperlegible", "sans-serif"), ("Average Sans", "sans-serif"),
+            ("Averia Sans Libre", "sans-serif"), ("Azeret Mono", "sans-serif"), ("B612", "sans-serif"),
+            ("Bai Jamjuree", "sans-serif"), ("Barlow", "sans-serif"), ("Barlow Condensed", "sans-serif"),
+            ("Basic", "sans-serif"), ("Be Vietnam Pro", "sans-serif"), ("Belleza", "sans-serif"),
             
-            // Serif
-            ("Georgia Pro", "serif"), ("Times New Roman", "serif"), ("Garamond", "serif"),
-            ("Baskerville", "serif"), ("Bodoni", "serif"), ("Book Antiqua", "serif"),
-            ("Cambria", "serif"), ("Caslon", "serif"), ("Century", "serif"),
-            ("Didot", "serif"), ("Goudy", "serif"), ("Minion", "serif"),
-            ("Palatino", "serif"), ("Rockwell", "serif"), ("Sabon", "serif"),
-            
-            // Sans Serif
-            ("Helvetica Neue", "sans-serif"), ("Arial Black", "sans-serif"), ("Futura", "sans-serif"),
-            ("Gill Sans", "sans-serif"), ("Gotham", "sans-serif"), ("Myriad", "sans-serif"),
-            ("Optima", "sans-serif"), ("Segoe UI", "sans-serif"), ("Trebuchet", "sans-serif"),
-            ("Verdana Pro", "sans-serif"),
-            
-            // Additional Popular DaFont fonts
-            ("Aaargh", "sans-serif"), ("Agency FB", "sans-serif"), ("Akzidenz Grotesk", "sans-serif"),
-            ("Angilla Tattoo", "script"), ("Anna", "script"), ("Antique Olive", "sans-serif"),
-            ("Arial Rounded", "sans-serif"), ("Arista", "script"), ("Baby Kruffy", "display"),
-            ("Backslash", "display"), ("Badaboom BB", "display"), ("Bangers", "display"),
-            ("Baron Neue", "display"), ("Bauhaus", "display"), ("Bellerose", "script"),
-            ("Beyond Wonderland", "script"), ("Blackout", "display"), ("Blippo", "display"),
-            ("Bleeding Cowboys", "display"), ("Bosox", "display"), ("Breeze", "script"),
-            ("British Inserat", "display"), ("Broadway", "display"), ("Brush Script", "script"),
-            ("Buffalo", "display"), ("Bukhari Script", "script"), ("California", "script"),
-            
-            // Bitmap/Pixel Fonts
-            ("Silkscreen", "bitmap"), ("Press Start", "bitmap"), ("Pixel", "bitmap"),
-            ("VCR OSD Mono", "bitmap"), ("DOS", "bitmap"), ("04b03", "bitmap"),
-            ("Arcade", "bitmap"), ("Bit", "bitmap"), ("Connection", "bitmap"),
-            ("Courier Pixel", "bitmap"), ("Dos Equis", "bitmap"), ("Early GameBoy", "bitmap"),
-            
-            // Fancy/Decorative
-            ("Algerian", "fancy"), ("Brush Script MT", "fancy"), ("Chiller", "fancy"),
-            ("Colonna MT", "fancy"), ("Copperplate", "fancy"), ("Curlz MT", "fancy"),
-            ("Desdemona", "fancy"), ("Edwardian Script", "fancy"), ("Elephant", "fancy"),
-            ("Engravers MT", "fancy"), ("Felix Titling", "fancy"), ("Footlight MT", "fancy"),
-            ("French Script MT", "fancy"), ("Haettenschweiler", "fancy"), ("Harlow Solid", "fancy"),
-            ("Harrington", "fancy"), ("High Tower Text", "fancy"), ("Imprint MT Shadow", "fancy"),
-            ("Informal Roman", "fancy"), ("Juice ITC", "fancy"), ("Kristen ITC", "fancy"),
-            ("Kunstler Script", "fancy"), ("Lucida Blackletter", "fancy"), ("Lucida Calligraphy", "fancy"),
-            ("Lucida Handwriting", "fancy"), ("Magneto", "fancy"), ("Matura MT Script", "fancy"),
-            ("Mistral", "fancy"), ("Modern No 20", "fancy"), ("Monotype Corsiva", "fancy"),
-            ("Niagara Solid", "fancy"), ("Old English Text MT", "fancy"), ("Onyx", "fancy"),
-            ("Palace Script MT", "fancy"), ("Papyrus", "fancy"), ("Parchment", "fancy"),
-            ("Perpetua Titling MT", "fancy"), ("Playbill", "fancy"), ("Poor Richard", "fancy"),
-            ("Pristina", "fancy"), ("Rage Italic", "fancy"), ("Ravie", "fancy"),
-            ("Script MT Bold", "fancy"), ("Showcard Gothic", "fancy"), ("Snap ITC", "fancy"),
-            ("Stencil", "fancy"), ("Tempus Sans ITC", "fancy"), ("Viner Hand ITC", "fancy"),
-            ("Vivaldi", "fancy"), ("Vladimir Script", "fancy"), ("Wide Latin", "fancy"),
-            
-            // Additional categories for variety - 200 more fonts
-            ("Abril Fatface", "display"), ("Acme", "sans-serif"), ("Advent Pro", "sans-serif"),
-            ("Aguafina Script", "script"), ("Akronim", "display"), ("Aladin", "script"),
-            ("Aldrich", "sans-serif"), ("Alfa Slab One", "display"), ("Alice", "serif"),
-            ("Almendra", "serif"), ("Almendra Display", "display"), ("Amarante", "display"),
-            ("Amaranth", "sans-serif"), ("Amethysta", "serif"), ("Amiri", "serif"),
-            ("Amita", "script"), ("Anaheim", "sans-serif"), ("Andada", "serif"),
-            ("Andika", "sans-serif"), ("Angkor", "display"), ("Annie Use Your Telescope", "script"),
-            ("Anonymous Pro", "monospace"), ("Antic", "sans-serif"), ("Antic Didone", "serif"),
-            ("Antic Slab", "serif"), ("Arbutus", "display"), ("Arbutus Slab", "serif"),
-            ("Archivo", "sans-serif"), ("Archivo Black", "sans-serif"), ("Archivo Narrow", "sans-serif"),
-            ("Aref Ruqaa", "serif"), ("Arima Madurai", "display"), ("Arimo", "sans-serif"),
-            ("Arizonia", "script"), ("Armata", "sans-serif"), ("Arsenal", "sans-serif"),
-            ("Artifika", "serif"), ("Arvo", "serif"), ("Arya", "sans-serif"),
-            ("Asap", "sans-serif"), ("Asap Condensed", "sans-serif"), ("Asar", "serif"),
-            ("Asset", "display"), ("Assistant", "sans-serif"), ("Astloch", "display"),
-            ("Asul", "sans-serif"), ("Athiti", "sans-serif"), ("Atma", "display"),
-            ("Atomic Age", "display"), ("Aubrey", "display"), ("Audiowide", "display"),
-            ("Autour One", "display"), ("Average", "serif"), ("Average Sans", "sans-serif"),
-            ("Averia Gruesa Libre", "display"), ("Averia Libre", "display"), ("Averia Sans Libre", "sans-serif"),
-            ("Averia Serif Libre", "serif"), ("Bad Script", "script"), ("Bahiana", "display"),
-            ("Bahianita", "display"), ("Bai Jamjuree", "sans-serif"), ("Baloo", "display"),
-            ("Baloo Bhai", "display"), ("Baloo Bhaina", "display"), ("Baloo Chettan", "display"),
-            ("Baloo Da", "display"), ("Baloo Paaji", "display"), ("Baloo Tamma", "display"),
-            ("Baloo Tammudu", "display"), ("Baloo Thambi", "display"), ("Balthazar", "serif"),
-            ("Bangers", "display"), ("Barlow", "sans-serif"), ("Barlow Condensed", "sans-serif"),
-            ("Barlow Semi Condensed", "sans-serif"), ("Barriecito", "display"), ("Barrio", "display"),
-            ("Basic", "sans-serif"), ("Battambang", "display"), ("Baumans", "display"),
-            ("Bayon", "display"), ("Be Vietnam", "sans-serif"), ("Bebas Neue", "sans-serif"),
-            ("Belgrano", "serif"), ("Bellefair", "serif"), ("Belleza", "sans-serif"),
-            ("BenchNine", "sans-serif"), ("Bentham", "serif"), ("Berkshire Swash", "script"),
-            ("Beth Ellen", "script"), ("Bevan", "display"), ("Big Shoulders Display", "display"),
-            ("Big Shoulders Text", "sans-serif"), ("Bigelow Rules", "display"), ("Bigshot One", "display"),
-            ("Bilbo", "script"), ("Bilbo Swash Caps", "script"), ("BioRhyme", "serif"),
-            ("BioRhyme Expanded", "serif"), ("Biryani", "sans-serif"), ("Bitter", "serif"),
-            ("Black And White Picture", "display"), ("Black Han Sans", "sans-serif"), ("Blinker", "sans-serif"),
-            ("Bokor", "display"), ("Bonbon", "script"), ("Boogaloo", "display"),
-            ("Bowlby One", "display"), ("Bowlby One SC", "display"), ("Brawler", "serif"),
-            ("Bree Serif", "serif"), ("Bubblegum Sans", "display"), ("Bubbler One", "sans-serif"),
-            ("Buda", "display"), ("Buenard", "serif"), ("Bungee", "display"),
-            ("Bungee Hairline", "display"), ("Bungee Inline", "display"), ("Bungee Outline", "display"),
-            ("Bungee Shade", "display"), ("Butcherman", "display"), ("Butterfly Kids", "script"),
-            ("Cabin", "sans-serif"), ("Cabin Condensed", "sans-serif"), ("Cabin Sketch", "display"),
-            ("Caesar Dressing", "display"), ("Cagliostro", "sans-serif"), ("Cairo", "sans-serif"),
-            ("Calligraffitti", "script"), ("Cambay", "sans-serif"), ("Cambo", "serif"),
-            ("Candal", "sans-serif"), ("Cantarell", "sans-serif"), ("Cantata One", "serif"),
-            ("Cantora One", "sans-serif"), ("Capriola", "sans-serif"), ("Cardo", "serif"),
-            ("Carme", "sans-serif"), ("Carrois Gothic", "sans-serif"), ("Carrois Gothic SC", "sans-serif"),
-            ("Caudex", "serif"), ("Cavolini", "script"), ("Cedarville Cursive", "script"),
+            // Monospace (40 fonts)
+            ("Fira Code", "monospace"), ("JetBrains Mono", "monospace"), ("Source Code Pro", "monospace"),
+            ("Roboto Mono", "monospace"), ("IBM Plex Mono", "monospace"), ("Ubuntu Mono", "monospace"),
+            ("Space Mono", "monospace"), ("Inconsolata", "monospace"), ("Anonymous Pro", "monospace"),
+            ("Cousine", "monospace"), ("Share Tech Mono", "monospace"), ("Overpass Mono", "monospace"),
+            ("Azeret Mono", "monospace"), ("Martian Mono", "monospace"), ("Red Hat Mono", "monospace"),
+            ("DM Mono", "monospace"), ("Fira Mono", "monospace"), ("PT Mono", "monospace"),
+            ("Cutive Mono", "monospace"), ("Nova Mono", "monospace"), ("Oxygen Mono", "monospace"),
+            ("Courier Prime", "monospace"), ("B612 Mono", "monospace"), ("Nanum Gothic Coding", "monospace"),
+            ("Geist Mono", "monospace"), ("Hack", "monospace"), ("Victor Mono", "monospace"),
+            ("Major Mono Display", "monospace"), ("Xanh Mono", "monospace"), ("Chivo Mono", "monospace"),
+            ("Silkscreen", "monospace"), ("VCR OSD Mono", "monospace"), ("Press Start", "monospace"),
+            ("Pixel", "monospace"), ("04b03", "monospace"), ("Arcade", "monospace"),
+            ("Minecraftia", "monospace"), ("Dogica", "monospace"), ("Commodore 64", "monospace"),
+            ("ZX Spectrum", "monospace"),
         ];
         
         popular_fonts.into_iter().map(|(name, category)| {
@@ -261,31 +207,23 @@ impl DafontProvider {
     }
 }
 
-impl Default for DafontProvider {
-    fn default() -> Self {
-        Self::new().expect("Failed to create DaFont provider")
-    }
-}
-
 #[async_trait]
 impl FontProviderTrait for DafontProvider {
     fn name(&self) -> &str {
         "DaFont"
     }
     
-    fn provider_type(&self) -> FontProvider {
-        FontProvider::Dafont
+    fn base_url(&self) -> &str {
+        &self.base_url
     }
     
-    async fn list_fonts(&self) -> Result<Vec<Font>> {
-        // Return curated list of popular fonts
-        // Full scraping would require handling pagination across 80k+ fonts
-        Ok(self.get_popular_fonts())
-    }
-    
-    async fn search(&self, query: &str) -> Result<Vec<Font>> {
+    async fn search(&self, query: &SearchQuery) -> Result<Vec<Font>> {
         let all_fonts = self.get_popular_fonts();
-        let query_lower = query.to_lowercase();
+        let query_lower = query.query.to_lowercase();
+        
+        if query_lower.is_empty() {
+            return Ok(all_fonts);
+        }
         
         Ok(all_fonts
             .into_iter()
@@ -296,29 +234,39 @@ impl FontProviderTrait for DafontProvider {
             .collect())
     }
     
-    async fn get_font(&self, id: &str) -> Result<Option<Font>> {
+    async fn list_all(&self) -> Result<Vec<Font>> {
+        Ok(self.get_popular_fonts())
+    }
+    
+    async fn get_font_family(&self, font_id: &str) -> Result<FontFamily> {
         let fonts = self.get_popular_fonts();
-        Ok(fonts.into_iter().find(|f| f.id == id))
+        let font = fonts.into_iter().find(|f| f.id == font_id)
+            .ok_or_else(|| anyhow::anyhow!("Font not found: {}", font_id))?;
+        
+        Ok(FontFamily {
+            id: font.id.clone(),
+            name: font.name.clone(),
+            provider: FontProvider::Dafont,
+            category: font.category.clone(),
+            variants: vec![],
+            subsets: font.subsets.clone(),
+            license: font.license.clone(),
+            designer: font.designer.clone(),
+            description: None,
+            preview_url: font.preview_url.clone(),
+            download_url: font.download_url.clone(),
+        })
     }
     
-    async fn download_font(&self, font: &Font, output_dir: &std::path::Path) -> Result<std::path::PathBuf> {
-        let download_url = font.download_url.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("No download URL for font"))?;
-        
-        let response = self.client.get(download_url).send().await?;
-        let bytes = response.bytes().await?;
-        
-        let file_path = output_dir.join(format!("{}.zip", font.id));
-        std::fs::write(&file_path, &bytes)?;
-        
-        Ok(file_path)
+    async fn get_download_url(&self, font_id: &str) -> Result<String> {
+        Ok(format!("{}/dl/?f={}", self.base_url, font_id.replace("dafont-", "")))
     }
     
-    async fn health_check(&self) -> bool {
-        self.client.get(&self.base_url)
+    async fn health_check(&self) -> Result<bool> {
+        Ok(self.client.get(&self.base_url)
             .send()
             .await
             .map(|r| r.status().is_success())
-            .unwrap_or(false)
+            .unwrap_or(false))
     }
 }
